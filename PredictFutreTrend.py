@@ -17,6 +17,8 @@ from datetime import datetime, timedelta
 stocks = ['2330', '2454', '2317', '3008', '2002', '2412', '2882', '2881', '1303', '3045',
           '1216', '1101', '1402', '9933', '1605', '2603', '2609', '3481', '2303', '2308']
 
+# 2881 model is bad
+
 def predict():
     predictions = []
     for stock in stocks :
@@ -44,21 +46,25 @@ def predict():
         seq_data.append(latest_30_data)
         seq_data = np.array(seq_data)
         seq_data = seq_data.reshape(seq_data.shape[0], seq_data.shape[1], seq_data.shape[2])
-        print('seq_data shape: {}'.format(seq_data.shape))
+        # print('seq_data shape: {}'.format(seq_data.shape))
 
         # Load the model
-        model = load_model(f'{stock}_model.keras')
+        model = load_model(f'./Weights/TransformerModel/{stock}_model.keras')
 
         # Predict the future trend
         prediction = model.predict(seq_data)
         prediction = scaler.inverse_transform(prediction)
-        print(f'{stock} future trend prediction: {prediction[0][0]}')
+        print(f'{stock}.TW future trend prediction: {prediction[0][0]}')
 
         predictions.append(prediction[0][0])
     
     predictions = np.array(predictions)
+    predictions = np.reshape(predictions, (1, predictions.shape[0]))
     print(predictions.shape)
     return predictions
 
+# predictions = predict()
+# print(predictions.shape)
+# print(predictions)
         
         

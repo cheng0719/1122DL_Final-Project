@@ -8,10 +8,123 @@ from keras.optimizers import Adam
 import yfinance as yf
 import PredictFutreTrend
 from datetime import datetime, timedelta
+import requests
+import logging
+
+class InfoFilter(logging.Filter):
+    def filter(self, record):
+        return record.levelno == logging.INFO
+
+# 创建 logger 对象
+logger = logging.getLogger()
+logger.setLevel(logging.DEBUG)  # 全局日志级别设置为 DEBUG，确保所有消息都能到达处理程序
+
+# 创建文件处理程序，设置级别为 INFO
+file_handler = logging.FileHandler('trade_decision.log')
+file_handler.setLevel(logging.DEBUG)  # 文件处理程序级别设置为 DEBUG，以便应用过滤器后过滤 INFO 消息
+
+# 创建并添加过滤器
+info_filter = InfoFilter()
+file_handler.addFilter(info_filter)
+
+# 创建日志格式并设置处理程序格式
+# formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+formatter = logging.Formatter('%(asctime)s - %(message)s')
+file_handler.setFormatter(formatter)
+
+# 添加处理程序到 logger
+logger.addHandler(file_handler)
+
+# 移除默认的处理程序（如果有的话）
+logger.propagate = False
+
+
+
 
 stocks = ['2330.TW', '2454.TW', '2317.TW', '3008.TW', '2002.TW', '2412.TW', '2882.TW', '2881.TW', '1303.TW', '3045.TW',
           '1216.TW', '1101.TW', '1402.TW', '9933.TW', '1605.TW', '2603.TW', '2609.TW', '3481.TW', '2303.TW', '2308.TW']
 
+
+# 取得股票資訊
+# Input:
+#   stock_code: 股票ID
+#   start_date: 開始日期，YYYYMMDD
+#   stop_date: 結束日期，YYYYMMDD
+# Output: 持有股票陣列
+def Get_Stock_Informations(stock_code, start_date, stop_date):
+    information_url = ('http://140.116.86.242:8081/stock/' +
+                       'api/v1/api_get_stock_info_from_date_json/' +
+                       str(stock_code) + '/' +
+                       str(start_date) + '/' +
+                       str(stop_date)
+                       )
+    result = requests.get(information_url).json()
+    if(result['result'] == 'success'):
+        return result['data']
+    return dict([])
+
+
+
+# 取得持有股票
+# Input:
+#   account: 使用者帳號
+#   password: 使用者密碼
+# Output: 持有股票陣列
+def Get_User_Stocks(account, password):
+    data = {'account': account,
+            'password': password
+            }
+    search_url = 'http://140.116.86.242:8081/stock/api/v1/get_user_stocks'
+    result = requests.post(search_url, data=data).json()
+    if(result['result'] == 'success'):
+        return result['data']
+    return dict([])
+
+
+
+# 預約購入股票
+# Input:
+#   account: 使用者帳號
+#   password: 使用者密碼
+#   stock_code: 股票ID
+#   stock_shares: 購入張數
+#   stock_price: 購入價格
+# Output: 是否成功預約購入(True/False)
+def Buy_Stock(account, password, stock_code, stock_shares, stock_price):
+    print('Buying stock...')
+    data = {'account': account,
+            'password': password,
+            'stock_code': stock_code,
+            'stock_shares': stock_shares,
+            'stock_price': stock_price}
+    buy_url = 'http://140.116.86.242:8081/stock/api/v1/buy'
+    result = requests.post(buy_url, data=data).json()
+    print('Result: ' + result['result'] + "\nStatus: " + result['status'])
+    return result['result'] == 'success'
+
+
+
+# 預約售出股票
+# Input:
+#   account: 使用者帳號
+#   password: 使用者密碼
+#   stock_code: 股票ID
+#   stock_shares: 售出張數
+#   stock_price: 售出價格
+# Output: 是否成功預約售出(True/False)
+def Sell_Stock(account, password, stock_code, stock_shares, stock_price):
+    print('Selling stock...')
+    data = {'account': account,
+            'password': password,
+            'stock_code': stock_code,
+            'stock_shares': stock_shares,
+            'stock_price': stock_price}
+    sell_url = 'http://140.116.86.242:8081/stock/api/v1/sell'
+    result = requests.post(sell_url, data=data).json()
+    print('Result: ' + result['result'] + "\nStatus: " + result['status'])
+    return result['result'] == 'success'
+
+###################################################################################################
 
 def generate_stock_data(num_stocks=20):
     
@@ -106,6 +219,7 @@ class MultiStockRLAgent:
 
 
 def trade(agent, stock_data, num_stocks):
+
     # 获取前30天的历史数据作为当前状态
     history_state = np.reshape(stock_data[-30:], [1, -1])  # shape: (1, num_stocks * 30)
     
@@ -114,6 +228,7 @@ def trade(agent, stock_data, num_stocks):
     
     # 构造新的状态，将前30天的历史数据与预测的未来一天的收盘价结合
     future_state = np.concatenate((history_state, predicted_prices), axis=1)
+    # print(f"Future State shape: {future_state.shape}")
     
     # 让 Agent 根据新的状态生成动作
     actions = agent.act(future_state)
@@ -128,24 +243,37 @@ def trade(agent, stock_data, num_stocks):
         else:
             adjusted_actions.append(action)
     
-    print(f"Original Actions: {actions}, Adjusted Actions: {adjusted_actions}")
+    # print(f"Original Actions: {actions}\nAdjusted Actions: {adjusted_actions}")
+    logger.info(f"\nOriginal Actions: {actions}\nAdjusted Actions: {adjusted_actions}")
     
     # 更新持有股票数量和资金
     for i, action in enumerate(adjusted_actions):
         ticker = stock_list[i]
+        # fetch the first 4 letters of the ticker Ex. '2330.TW' -> '2330'
+        ticker_num = ticker[:4]
         if action == 1:  # 买入
             # 假设买入时花费当前收盘价
             current_price = stock_data[-1, i]  # 获取当前收盘价
             if agent.cash >= current_price:
                 agent.stocks[ticker] += 1
                 agent.cash -= current_price
+                if Buy_Stock('NQ6124052', 'NQ6124', ticker_num, 1, current_price)==False:
+                    logger.info(f"Failed to buy {ticker} at {current_price}, rolling back the action")
+                    agent.stocks[ticker] -= 1
+                    agent.cash += current_price
         elif action == 2:  # 卖出
             if agent.stocks[ticker] > 0:
                 current_price = stock_data[-1, i]  # 获取当前收盘价
                 agent.stocks[ticker] -= 1
                 agent.cash += current_price
+                if Sell_Stock('NQ6124052', 'NQ6124', ticker_num, 1, current_price)==False:
+                    logger.info(f"Failed to sell {ticker} at {current_price}, rolling back the action")
+                    agent.stocks[ticker] += 1
+                    agent.cash -= current_price
     
-    print(f"Updated Cash: {agent.cash}, Updated Stocks: {agent.stocks}")
+    # print(f"Updated Cash: {agent.cash}\nUpdated Stocks: {agent.stocks}")
+    logger.info(f"\nUpdated Cash Estimation: {agent.cash}\nUpdated Stocks Estimation: {agent.stocks}")
+    logger.info("*** End of this trade decision making ***\n")
     
     return adjusted_actions
 
