@@ -218,13 +218,20 @@ class MultiStockRLAgent:
         self.model.save_weights(name)
 
 
-def trade(agent, stock_data, num_stocks):
+def trade(agent, stock_data, user_stocks):
+    logger.info("*** Start of this trade decision making ***")
+    logger.info(f"\nInitial Cash: {agent.cash}\nInitial Stocks:            {agent.stocks}")
 
     # 获取前30天的历史数据作为当前状态
     history_state = np.reshape(stock_data[-30:], [1, -1])  # shape: (1, num_stocks * 30)
     
     # 使用 transformer_model 预测未来一天的收盘价
     predicted_prices = PredictFutreTrend.predict()
+    # predicted_prices = []
+    # for i in range(20):
+    #     predicted_prices.append(i)
+    # predicted_prices = np.array(predicted_prices)
+    # predicted_prices = np.reshape(predicted_prices, (1, predicted_prices.shape[0]))
     
     # 构造新的状态，将前30天的历史数据与预测的未来一天的收盘价结合
     future_state = np.concatenate((history_state, predicted_prices), axis=1)
@@ -238,7 +245,20 @@ def trade(agent, stock_data, num_stocks):
     stock_list = list(agent.stocks.keys())
     
     for i, action in enumerate(actions):
-        if action == 2 and agent.stocks.get(stock_list[i], 0) == 0:
+        stock_num = stocks[i]
+        begginning_price = 0
+        for stock in user_stocks:
+            if stock['stock_code_id'] == stock_num[:4]:
+                begginning_price = stock['beginning_price']
+                break
+        print(f'{i+1}. Stock number: {stock_num}, action: {action}')
+        print(f'predicted_prices[0][i]: {predicted_prices[0][i]}, begginning_price: {begginning_price}')
+        if action ==2 and predicted_prices[0][i] < begginning_price:
+            print('Predicted price is lower than the beginning price')
+            print(f"Predicted price: {predicted_prices[0][i]}, Beginning price: {begginning_price}")
+            adjusted_actions.append(0)
+        elif action == 2 and agent.stocks.get(stock_list[i], 0) == 0:
+            print('No stock to sell')
             adjusted_actions.append(0)  # 没有持有股票，改为不动作
         else:
             adjusted_actions.append(action)
@@ -282,7 +302,7 @@ if __name__ == "__main__":
     num_stocks = 20  # 假設有20支股票
     state_size = 1  # 每支股票的狀態維度
     action_size = 3  # 每支股票的動作數量（買、賣、保持）
-    initial_cash = 100000000  # 初始資金
+    initial_cash = 94042675  # 初始資金
     initial_stocks = {  # 初始持有股票及其數量
         '2330.TW': 0,
         '2454.TW': 0,
@@ -305,10 +325,15 @@ if __name__ == "__main__":
         '2303.TW': 0,
         '2308.TW': 0
     }
+    user_stocks = Get_User_Stocks('NQ6124052', 'NQ6124')
+    for stock in user_stocks:
+        initial_stocks[stock['stock_code_id']+'.TW'] = stock['shares']
+    print(initial_stocks)
+    # exit()
     # stocks = ['2330.TW', '2454.TW', '2317.TW', '3008.TW', '2002.TW', '2412.TW', '2882.TW', '2881.TW', '1303.TW', '3045.TW',
     #       '1216.TW', '1101.TW', '1402.TW', '9933.TW', '1605.TW', '2603.TW', '2609.TW', '3481.TW', '2303.TW', '2308.TW']
     agent = MultiStockRLAgent(state_size, action_size, num_stocks, initial_cash, initial_stocks)
 
     stock_data = generate_stock_data(num_stocks)
 
-    trade(agent, stock_data, num_stocks)
+    trade(agent, stock_data, user_stocks)
