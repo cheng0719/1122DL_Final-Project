@@ -169,7 +169,7 @@ class MultiStockRLAgent:
         self.num_stocks = num_stocks  # 股票數量
         self.memory = deque(maxlen=2000)
         self.gamma = 0.95    # 折扣率
-        self.epsilon = 1.0   # 初始探索率，減少為 0.5
+        self.epsilon = 1.0   # 初始探索率，視情況減少為 0.5
         self.epsilon_min = 0.01
         self.epsilon_decay = 0.995
         self.learning_rate = 0.001
@@ -302,7 +302,7 @@ if __name__ == "__main__":
     num_stocks = 20  # 假設有20支股票
     state_size = 1  # 每支股票的狀態維度
     action_size = 3  # 每支股票的動作數量（買、賣、保持）
-    initial_cash = 94042675  # 初始資金
+    initial_cash = 93326145  # 初始資金
     initial_stocks = {  # 初始持有股票及其數量
         '2330.TW': 0,
         '2454.TW': 0,

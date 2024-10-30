@@ -10,6 +10,7 @@ pandas = "*"
 scikit-learn = "*"
 matplotlib = "*"
 yfinance = "*"
+tensorflow-io-gcs-filesystem = ">=0.30.0"
 
 [dev-packages]
 ipykernel = "*"
